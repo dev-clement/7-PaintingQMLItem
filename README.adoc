@@ -1,0 +1,304 @@
+= Painting QML item
+In this article, we'll see how to setup a visual QML type.
+
+:toc:
+:sectnums:
+
+:imagesdir: asset/images/
+
+== Introduction
+What we want to do, is like creating some logo on the Cpp side, and then display them on the QML sheet.
+
+image::typeForImage.png[]
+
+NOTE: The example display above will then create a logo on the application rather than a simple type.
+
+== Create a painted class
+In order to create a visual image using the type you will create (in our case: Logo), you'll need to create a class inheriting from `QQuickPaintedItem`, this class gives you a surface on top of which you can paint, 
+
+In order to paint to the surface the `QQuickPaintedItem` is going to give you, you'll need to override the `paint(QPainter *po_painter)` method that will going to draw.
+
+== Using resource to put images
+In order to store the needed image as it will be used by the project, you should set a resource file in the QML module:
+
+```cmake
+qt_add_qml_module(appQPaintingQMLItems
+    URI QPaintingQMLItems
+    VERSION 1.0
+    QML_FILES
+        qml/Main.qml
+    RESOURCES
+        resources.qrc
+)
+```
+This will create a resource file, where you'll be able to put some logo in it. 
+
+IMPORTANT: When you are using resources on the project, don't forget to set both CMAKE_AUTOMOC and CMAKE_AUTORCC as ON.
+
+== Classes
+Once you've all the image you need to display, you will then create the class that will use the resources images:
+
+=== LearLearnQtLogo
+This class will be inheriting from the `QQuickPainterItem`, that is a class that let QML to use the `QPainter` API for displaying custom images or shapes.
+
+==== Class
+```cpp
+#include <QtQML>
+#include <QImage>
+#include <QQuickPaintedItem>
+
+class LearnQtLogo : public QQuickPaintedItem {
+    Q_OBJECT
+public:
+    explicit LearnQtLogo(QQuickItem *po_parent = nullptr);
+
+signals:
+};
+```
+
+NOTE: The constructor isn't taking a `QObject` pointer as parameter, but a `QQuickItem`.
+
+However, in order to use a class inheriting from the `QQuickPaintedItem`, we need to override some of the method defined as abstract like this:
+
+image::learnqtlogo_header.png[]
+
+NOTE: The class will just override the `paint` method provided by the parent.
+
+==== Properties
+After that override method, we'll need to put some properties that will then be used on the QML side of the app:
+
+```cpp
+class LearnQtLogo : public QQuickPaintedItem {
+    Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(QColor bgColor READ bgColor WRITE setBgColor NOTIFY bgColorChanged)
+    Q_PROPERTY(QColor textColor READ textColor WRITE setTextColor NOTIFY textColorChanged)
+    Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+    Q_PROPERTY(QTopic topic READ topic WRITE setTopic NOTIFY topicChanged)
+public:
+    explicit LearnQtLogo(QQuickItem *po_parent = nullptr);
+
+    // QQuickPaintedItem interface
+    void paint(QPainter *po_painter);
+
+signals:
+};
+```
+
+NOTE: With all the properties listed above, we also have a `QML_ELEMENT` macro that will then let QML using the type.
+
+==== Rendering an image
+As you remembered, there is a `paint()` method, this method can be used in order to render an image on the screen, this can be done using `QImage`, `QRect` and the `QPainter *`
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    QString o_imagePath = ":/images/LearnQt.png";
+    if (_o_topic == LearnQtLogo::QTQUICK) {
+        o_imagePath = ":/images/LearnQtQuick.png";
+    }
+
+    QImage o_image{ o_imagePath };
+    QImage o_scaledImage = o_image.scaled(width(), height());
+    QRect o_rect = o_image.rect();
+    po_painter->drawImage(o_rect, o_scaledImage);
+}
+```
+
+NOTE: The `o_imagePath` is coming from the resource we add to the project.
+
+== Rendering
+After you've change the `paint()` method on the cpp side, here's what you should have as output:
+
+image::renderLogo.png[]
+
+NOTE: As you can see, using QML you can display anything even simple image and create type for display them
+
+IMPORTANT: As you can see, the type `LearnQtLogo` we defined above contains a `QtTopic` that is an enum in the class, if you want to use it on the QML side and fill the `topic` property, you need to specify this enum to the QML side like this:
+
+```cpp
+class LearnQtLogo : public QQuickPaintedItem {
+    Q_OBJECT
+    QML_ELEMENT
+    ...
+public:
+    ...
+
+    enum QtTopic {
+        QTCPP
+        , QTQUICK
+    };
+    Q_ENUM(QtTopic)
+```
+Using this `Q_ENUM` will register this type to the QML side and then let the user using it.
+
+Now, if you are adding the following into the qml file:
+
+```cpp
+Window {
+    ...
+
+    Logo {
+        ...
+        topic: Logo.QTQUICK
+    }
+}
+```
+
+And if you look at the `paint` method:
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    QString o_imagePath = ":/images/LearnQt.png";
+    if (_o_topic == LearnQtLogo::QTQUICK) {
+        o_imagePath = ":/images/LearnQtQuick.png";
+    }
+
+    ...
+}
+```
+
+You'll then have the following image rendered instead of the previous one:
+
+image::renderQtQuickLogo.png[]
+
+NOTE: As you just saw in the previous image, you'll generate either QtQuick logo or learnQt logo depending on the topic you set inside of the QML.
+
+=== paint method
+Instead of choosing the image depending on the topic, the rest of the `paint` method is for displaying the image inside of a rectangle and a scaled image:
+
+```cpp
+QImage o_image{ o_imagePath };
+QImage o_scaledImage = o_image.scaled(width(), height());
+QRect o_rect = o_image.rect();
+po_painter->drawImage(o_rect, o_scaledImage);
+```
+
+NOTE: As you can see, we create an image depending on the image path we choose, then we scale the image depending on the width and height of the class, then w draw it inside of the rectangle.
+
+==== Drawing rectangle at the bottom of the image
+We had the image written in our app, now we want also to display the topic at the bottom of the image. That's going to use `paint()` method like this:
+
+NOTE: We want to put the rectangle at the bottom-left corner of the image we draw, its y position is going to be on top like the following:
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    ...
+
+    //
+    ...
+
+    // Draw the rectangle
+    po_painter->setBrush(bgColor());
+    po_painter->drawRect(o_rect.bottomLeft().x(), o_rect.bottomLeft().y() - 33, width(), 33);
+}
+```
+
+Result will be something like this:
+
+image::asset/images/renderQtQuickLogoWithTopic.png[]
+
+NOTE: The blue color we have at the bottom of the image is the value set inside of the property of the Logo in the QML
+
+```qml
+Logo {
+    ...
+    ...
+    bgColor: "blue"
+    ...
+    ...
+}
+```
+
+==== Drawing the text
+Now that we have this rectangle with the specified color on the QML file, we want to display the text specified in the QML as well.
+
+NOTE: The class contains a `textColor` property that will set the color of the displayed text.
+
+Now we want to change the brush of the painter to use the color specified in the property:
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    ...
+    ...
+
+    ...
+    ...
+    ...
+    ...
+
+    // Draw the rectangle
+    ...
+    ...
+    ...
+    
+    // Draw the text
+    po_painter->setPen(textColor());
+}
+```
+
+After that, we want to specify where we want to draw the text (on the rectangle we did later on):
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    ...
+    ...
+
+    ...
+    ...
+    ...
+    ...
+
+    // Draw the rectangle
+    ...
+    ...
+    ...
+
+    // Draw the text
+    po_painter->setPen(textColor());
+    QPoint o_textPosition = o_rect.bottomLeft();
+    o_textPosition.rx() += 10;
+    o_textPosition.ry() -= 10;
+}
+```
+
+Then, once that's done, we just want to display the text to the app where we put the blue rectangle:
+
+```cpp
+void LearnQtLogo::paint(QPainter *po_painter) {
+    // Draw image
+    ...
+    ...
+
+    ...
+    ...
+    ...
+    ...
+
+    // Draw the rectangle
+    ...
+    ...
+    ...
+
+    // Draw the text
+    ...
+    ...
+    ...
+    ...
+    po_painter->setFont(QFont{"Consolas", 10, QFont::Bold});
+    po_painter->drawText(o_textPosition, text());
+
+}
+```
+
+After that we now have the following logo displayed on the application:
+
+image::finalAppRendered.png[]
+
+NOTE: Now that you have a logo displayed, you can create logo on the QML side and as many as you want:
+
+image::renderBothLogos.png[]
